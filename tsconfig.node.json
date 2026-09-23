@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["core/*"],
+      "@ai/*": ["ai/*"],
+      "@tools/*": ["tools/*"],
+      "@tasks/*": ["tasks/*"],
+      "@config/*": ["config/*"],
+      "@shared/*": ["shared/*"]
+    }
+  },
+  "include": ["electron", "vite.config.ts", "core", "ai", "tools", "tasks", "config", "shared", "tests"]
+}

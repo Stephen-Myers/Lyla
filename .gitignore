@@ -1,0 +1,38 @@
+# Dependencies & build
+node_modules/
+dist/
+dist-electron/
+release/
+coverage/
+.vite/
+
+# Environment & secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials.json
+secrets.json
+**/lyla-config.json
+**/lyla-memory.json
+
+# Local runtime / user data (if ever created inside the repo)
+data/
+user-data/
+logs/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.local
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Electron / packaging leftovers
+*.exe
+*.blockmap
+.DS_Store
