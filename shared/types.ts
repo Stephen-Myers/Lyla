@@ -86,6 +86,53 @@ export interface LoggingConfig {
   conversationLogging: boolean;
 }
 
+export type VisionMode = 'on_demand' | 'visual_context' | 'continuous';
+
+export interface VisionConfig {
+  /** Master switch for any screen vision. */
+  enabled: boolean;
+  /** Temporary pause without changing other settings. */
+  paused: boolean;
+  mode: VisionMode;
+  /** Lightweight active-window sampling interval (visual_context mode). */
+  contextIntervalMs: number;
+  /** Reserved for later continuous capture; unused in Phase 1. */
+  continuousIntervalMs: number;
+  /** Prefer local processing when later vision models are wired. */
+  localOnly: boolean;
+  excludedApplications: string[];
+  excludedDisplayIds: string[];
+}
+
+export interface VisionSnapshot {
+  enabled: boolean;
+  paused: boolean;
+  mode: VisionMode;
+  looking: boolean;
+  indicator: string;
+  displays: Array<{
+    id: string;
+    index: number;
+    label: string;
+    name: string;
+    width: number;
+    height: number;
+    scalePercent: number;
+    rotation: number;
+    position: 'primary' | 'left' | 'right' | 'above' | 'below' | 'secondary';
+    isPrimary: boolean;
+  }>;
+  activeWindow: {
+    title: string;
+    application: string;
+    processName: string;
+    displayId: string | null;
+    displayLabel: string | null;
+  } | null;
+  lastObservation: string | null;
+  lastCaptureAt: number | null;
+}
+
 export interface LylaConfig {
   version: number;
   uiMode: UiMode;
@@ -95,6 +142,7 @@ export interface LylaConfig {
   user: UserProfile;
   llm: LlmConfig;
   logging: LoggingConfig;
+  vision: VisionConfig;
 }
 
 export interface ChatMessage {
@@ -135,6 +183,7 @@ export interface AssistantSnapshot {
   messages: ChatMessage[];
   activities: ToolActivity[];
   telemetry: SystemTelemetry | null;
+  vision: VisionSnapshot | null;
   activeTaskIds: string[];
   listening: boolean;
   online: boolean;

@@ -45,8 +45,8 @@ export function ChatPanel({
       >
         {!visible.length && (
           <div className="empty-hint">
-            Hey. I&apos;m LYLA. Ask for system status, open an app, search the web, or tell me
-            something to remember.
+            Hey. I&apos;m LYLA. Ask what&apos;s on your screen, for system status, to open an app,
+            to search the web, or tell me something to remember.
           </div>
         )}
         {visible.map((m) => (

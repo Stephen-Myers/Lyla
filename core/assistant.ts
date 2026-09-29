@@ -22,7 +22,11 @@ import { MemoryStore } from './memory';
 import { PermissionGuard } from './permissions';
 import { ToolRegistry } from '../tools/types';
 import { collectTelemetry, registerBuiltinTools } from '../tools/builtin';
+import { registerVisionTools } from '../tools/vision';
 import { logger } from './logging';
+import { PrivacyManager } from '../vision/privacy';
+import { ScreenManager } from '../vision/ScreenManager';
+import { UnavailableCaptureProvider } from '../vision/capture/provider';
 
 export interface AssistantEvents {
   stream: (chunk: StreamChunk) => void;
@@ -31,6 +35,10 @@ export interface AssistantEvents {
   confirm: (payload: { id: string; message: string }) => void;
   speak: (payload: SpeakPayload) => void;
   stopSpeak: () => void;
+}
+
+export interface AssistantOptions {
+  screenManager?: ScreenManager;
 }
 
 export class LylaAssistant extends EventEmitter<AssistantEvents> {
@@ -47,20 +55,35 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
   private abort: AbortController | null = null;
   private pendingConfirms = new Map<string, (ok: boolean) => void>();
   private telemetryTimer: NodeJS.Timeout | null = null;
+  private screens: ScreenManager;
 
-  constructor(config: LylaConfig) {
+  constructor(config: LylaConfig, options: AssistantOptions = {}) {
     super();
     this.config = config;
     this.llm = createLlmProvider(config.llm);
     this.voice = createVoiceProvider(config.voice);
     this.memory = new MemoryStore();
     this.permissions = new PermissionGuard(config.permissions);
+    this.screens =
+      options.screenManager ??
+      new ScreenManager({
+        capture: new UnavailableCaptureProvider(),
+        privacy: new PrivacyManager(config.vision),
+        config: config.vision,
+      });
     registerBuiltinTools(this.tools, this.memory);
+    registerVisionTools(this.tools, this.screens);
+    this.screens.on('VisualContextUpdated', () => this.emitSnapshot());
+    this.screens.on('ScreenChanged', () => this.emitSnapshot());
+    this.screens.on('WindowChanged', () => this.emitSnapshot());
+    this.screens.on('VisionAnalysisStarted', () => this.emitSnapshot());
+    this.screens.on('VisionAnalysisCompleted', () => this.emitSnapshot());
     logger.configure(config.logging);
   }
 
   start(): void {
     logger.info('assistant', 'LYLA online');
+    this.screens.start();
     void this.refreshTelemetry();
     this.telemetryTimer = setInterval(() => {
       void this.refreshTelemetry();
@@ -69,6 +92,7 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
 
   stopServices(): void {
     if (this.telemetryTimer) clearInterval(this.telemetryTimer);
+    this.screens.stop();
     this.abortActive('Assistant shutting down');
   }
 
@@ -81,6 +105,7 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
     this.llm = createLlmProvider(config.llm);
     this.voice = createVoiceProvider(config.voice);
     this.permissions.update(config.permissions);
+    this.screens.setConfig(config.vision);
     logger.configure(config.logging);
     this.emitSnapshot();
   }
@@ -96,6 +121,7 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
       messages: [...this.messages],
       activities: [...this.activities],
       telemetry: this.telemetry,
+      vision: this.screens.getSnapshot(),
       activeTaskIds: [],
       listening: this.state === 'listening',
       online: true,
@@ -290,6 +316,10 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
       memoryBlock,
       '',
       `LLM provider: ${this.config.llm.provider} (${this.config.llm.model || 'default'}).`,
+      '',
+      `Vision mode: ${this.config.vision.enabled ? this.config.vision.mode : 'disabled'}.`,
+      `Default vision is on-demand: capture a screen only when the user asks you to look.`,
+      `Use get_screens, get_active_window, capture_screen, capture_window, or capture_region for visual questions like "what's on my screen", "look at the left monitor", or "explain this".`,
     ].join('\n');
 
     let currentAssistant = assistantMessage;
@@ -553,6 +583,11 @@ function humanizeTool(name: string): string {
     memory_recall: 'Recalling memory',
     memory_forget: 'Forgetting memory',
     get_current_time: 'Checking the time',
+    get_screens: 'Listing displays',
+    get_active_window: 'Checking the active window',
+    capture_screen: 'Looking at the screen',
+    capture_window: 'Looking at the window',
+    capture_region: 'Looking at a screen region',
   };
   return map[name] ?? name.replace(/_/g, ' ');
 }

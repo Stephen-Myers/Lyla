@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { LlmProviderId, LylaConfig } from '@shared/types';
+import type { LlmProviderId, LylaConfig, VisionMode } from '@shared/types';
 import { DEFAULT_MODELS, modelLooksInvalidForProvider } from '../../../config/llmDefaults';
 
 export function SettingsModal({
@@ -287,6 +287,57 @@ export function SettingsModal({
               Web access
             </label>
           </div>
+
+          <h2 style={{ marginTop: '0.5rem' }}>Vision</h2>
+
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={draft.vision.enabled}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    vision: { ...draft.vision, enabled: e.target.checked },
+                  })
+                }
+              />{' '}
+              Allow screen vision
+            </label>
+          </div>
+
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={draft.vision.paused}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    vision: { ...draft.vision, paused: e.target.checked },
+                  })
+                }
+              />{' '}
+              Pause vision
+            </label>
+          </div>
+
+          <div className="field">
+            <label>Vision mode</label>
+            <select
+              value={draft.vision.mode}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  vision: { ...draft.vision, mode: e.target.value as VisionMode },
+                })
+              }
+            >
+              <option value="on_demand">On demand (capture only when asked)</option>
+              <option value="visual_context">Visual context (sample active app, no screenshots)</option>
+              <option value="continuous">Continuous (reserved — not capturing yet)</option>
+            </select>
+          </div>
         </div>
 
         <div className="settings-actions">
@@ -303,6 +354,7 @@ export function SettingsModal({
                 personality: draft.personality,
                 permissions: draft.permissions,
                 voice: draft.voice,
+                vision: draft.vision,
               })
             }
           >

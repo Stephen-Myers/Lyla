@@ -23,5 +23,5 @@
       "@shared/*": ["shared/*"]
     }
   },
-  "include": ["electron", "vite.config.ts", "core", "ai", "tools", "tasks", "config", "shared", "tests"]
+    "include": ["electron", "vite.config.ts", "core", "ai", "tools", "tasks", "config", "shared", "tests", "vision"]
 }

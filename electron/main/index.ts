@@ -12,6 +12,9 @@ import { LylaAssistant } from '../../core/assistant';
 import { loadConfig, saveConfig } from '../../config/store';
 import { logger } from '../../core/logging';
 import { IPC, type LylaConfig, type UiMode } from '../../shared/types';
+import { createElectronCaptureProvider } from '../../vision/capture/electron';
+import { PrivacyManager } from '../../vision/privacy';
+import { ScreenManager } from '../../vision/ScreenManager';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -115,6 +118,7 @@ function registerIpc(): void {
       user: { ...current.user, ...partial.user },
       llm: { ...current.llm, ...partial.llm },
       logging: { ...current.logging, ...partial.logging },
+      vision: { ...current.vision, ...partial.vision },
     });
     assistant?.setConfig(next);
     return next;
@@ -160,7 +164,14 @@ app.whenReady().then(() => {
   const config = loadConfig();
   logger.configure(config.logging);
   logger.initFileSink();
-  assistant = new LylaAssistant(config);
+  const captureDir = path.join(app.getPath('userData'), 'vision-captures');
+  fs.mkdirSync(captureDir, { recursive: true });
+  const screenManager = new ScreenManager({
+    capture: createElectronCaptureProvider({ captureDir }),
+    privacy: new PrivacyManager(config.vision),
+    config: config.vision,
+  });
+  assistant = new LylaAssistant(config, { screenManager });
   wireAssistant(assistant);
   assistant.start();
   registerIpc();

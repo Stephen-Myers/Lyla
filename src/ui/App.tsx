@@ -11,6 +11,7 @@ import { ActivityFeed } from './components/ActivityFeed';
 import { ChatPanel } from './components/ChatPanel';
 import { SettingsModal } from './components/SettingsModal';
 import { ConfirmBanner } from './components/ConfirmBanner';
+import { VisionPanel } from './components/VisionPanel';
 import { useVoicePlayback } from './hooks/useVoicePlayback';
 
 const emptySnapshot: AssistantSnapshot = {
@@ -18,6 +19,7 @@ const emptySnapshot: AssistantSnapshot = {
   messages: [],
   activities: [],
   telemetry: null,
+  vision: null,
   activeTaskIds: [],
   listening: false,
   online: true,
@@ -108,7 +110,13 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <h1>LYLA</h1>
-          <span>personal intelligence</span>
+          <span>
+            {snapshot.vision?.looking
+              ? 'visual perception · looking'
+              : snapshot.vision?.indicator === 'VISION OFF'
+                ? 'personal intelligence · vision off'
+                : `personal intelligence · ${snapshot.vision?.indicator.toLowerCase() ?? 'vision off'}`}
+          </span>
         </div>
         <div className="top-actions">
           {(['minimal', 'desktop', 'immersive'] as UiMode[]).map((m) => (
@@ -143,6 +151,10 @@ export function App() {
             <div className="waveform" aria-hidden>
               <span /><span /><span /><span /><span />
             </div>
+          </div>
+          <div className="panel-header">Vision</div>
+          <div className="panel-body">
+            <VisionPanel vision={snapshot.vision} />
           </div>
           <div className="panel-header">Telemetry</div>
           <div className="panel-body">

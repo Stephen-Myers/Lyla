@@ -67,7 +67,7 @@ export function buildSystemPrompt(
     timezoneLine,
     user.projects.length ? `Known projects: ${user.projects.join(', ')}.` : '',
     ``,
-    `You have tools for system status, opening apps, web research, files, memory, and more.`,
+    `You have tools for system status, opening apps, web research, files, memory, connected displays, screen capture, and more.`,
     `When tools are needed, call them. When not needed, answer directly.`,
   ]
     .filter(Boolean)

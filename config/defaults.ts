@@ -64,6 +64,16 @@ export const DEFAULT_CONFIG: LylaConfig = {
     level: 'info',
     conversationLogging: false,
   },
+  vision: {
+    enabled: true,
+    paused: false,
+    mode: 'on_demand',
+    contextIntervalMs: 10000,
+    continuousIntervalMs: 3000,
+    localOnly: false,
+    excludedApplications: [],
+    excludedDisplayIds: [],
+  },
 };
 
 export function mergeConfig(partial: Partial<LylaConfig> | undefined): LylaConfig {
@@ -89,6 +99,14 @@ export function mergeConfig(partial: Partial<LylaConfig> | undefined): LylaConfi
     },
     llm: { ...DEFAULT_CONFIG.llm, ...partial.llm },
     logging: { ...DEFAULT_CONFIG.logging, ...partial.logging },
+    vision: {
+      ...DEFAULT_CONFIG.vision,
+      ...partial.vision,
+      excludedApplications:
+        partial.vision?.excludedApplications ?? DEFAULT_CONFIG.vision.excludedApplications,
+      excludedDisplayIds:
+        partial.vision?.excludedDisplayIds ?? DEFAULT_CONFIG.vision.excludedDisplayIds,
+    },
   };
   merged.llm.model = resolveModelForProvider(merged.llm.provider, merged.llm.model);
   return merged;

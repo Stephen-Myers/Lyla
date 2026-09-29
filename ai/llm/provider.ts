@@ -336,6 +336,62 @@ export class MockLlmProvider implements LLMProvider {
       return;
     }
 
+    if (
+      /\b(how many (screens|monitors|displays)|list (my )?(screens|monitors|displays)|what( screens| monitors) (do i have|are connected)|connected displays)\b/i.test(
+        lower,
+      )
+    ) {
+      yield* tokens(reply("I'll check what's connected."));
+      yield {
+        type: 'tool_call',
+        toolCall: { id: 'mock_screens', name: 'get_screens', arguments: '{}' },
+      };
+      yield { type: 'done' };
+      return;
+    }
+
+    if (
+      /\b(active window|what('?s| is) focused|what app am i (in|using)|foreground window|which (app|application|window))\b/i.test(
+        lower,
+      )
+    ) {
+      yield {
+        type: 'tool_call',
+        toolCall: { id: 'mock_active_win', name: 'get_active_window', arguments: '{}' },
+      };
+      yield { type: 'done' };
+      return;
+    }
+
+    const lookMonitor = lower.match(
+      /\blook at (?:the )?(left|right|other|second|main|primary) (?:screen|monitor|display)\b/,
+    );
+    const namedMonitor = lower.match(
+      /\blook at (?:the )?([a-z0-9][\w-]*) (?:screen|monitor|display)\b/,
+    );
+    const namedDisplay =
+      namedMonitor && !/^(my|this|a)$/.test(namedMonitor[1]) ? namedMonitor[1] : undefined;
+    if (
+      lookMonitor ||
+      namedDisplay ||
+      /\b(what'?s on my screen|what am i looking at|look at (this|my screen|the screen)|capture (my )?screen|look at this)\b/i.test(
+        lower,
+      )
+    ) {
+      const display = lookMonitor?.[1] ?? namedDisplay;
+      yield* tokens(reply("I'll take a look."));
+      yield {
+        type: 'tool_call',
+        toolCall: {
+          id: 'mock_capture',
+          name: 'capture_screen',
+          arguments: JSON.stringify(display ? { display } : {}),
+        },
+      };
+      yield { type: 'done' };
+      return;
+    }
+
     if (/\b(what time|current time|what's the time|whats the time)\b/i.test(lower)) {
       yield {
         type: 'tool_call',
@@ -456,7 +512,7 @@ export class MockLlmProvider implements LLMProvider {
 
     yield* tokens(
       reply(
-        "I heard you. I'm running on the local mock brain right now — configure OpenAI, Anthropic, or Ollama in Settings for full reasoning. I can still handle system status, opening apps, web search, and memory.",
+        "I heard you. I'm running on the local mock brain right now — configure OpenAI, Anthropic, or Ollama in Settings for full reasoning. I can still handle system status, opening apps, web search, memory, and looking at your screens.",
       ),
     );
     yield { type: 'done' };
