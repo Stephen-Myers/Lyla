@@ -98,8 +98,10 @@ export interface VisionConfig {
   contextIntervalMs: number;
   /** Reserved for later continuous capture; unused in Phase 1. */
   continuousIntervalMs: number;
-  /** Prefer local processing when later vision models are wired. */
+  /** When on, cloud vision providers refuse to send the screen off this machine. */
   localOnly: boolean;
+  /** Optional vision model. Leave empty to use the chat model. */
+  model: string;
   excludedApplications: string[];
   excludedDisplayIds: string[];
 }

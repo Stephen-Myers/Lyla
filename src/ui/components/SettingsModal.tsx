@@ -338,6 +338,36 @@ export function SettingsModal({
               <option value="continuous">Continuous (reserved — not capturing yet)</option>
             </select>
           </div>
+
+          <div className="field">
+            <label>Vision model (optional)</label>
+            <input
+              value={draft.vision.model}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  vision: { ...draft.vision, model: e.target.value },
+                })
+              }
+              placeholder="Uses the chat model. Ollama example: llava"
+            />
+          </div>
+
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={draft.vision.localOnly}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    vision: { ...draft.vision, localOnly: e.target.checked },
+                  })
+                }
+              />{' '}
+              Keep vision on this machine
+            </label>
+          </div>
         </div>
 
         <div className="settings-actions">

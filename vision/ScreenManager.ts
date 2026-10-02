@@ -1,9 +1,19 @@
 import { EventEmitter } from 'eventemitter3';
 import type { VisionConfig, VisionSnapshot } from '../shared/types';
 import type { ScreenCaptureProvider } from './capture/provider';
+import {
+  activeWindowHint,
+  contextFromReading,
+  formatObservation,
+  metadataContext,
+  type PreparedImage,
+  type VisualContext,
+} from './context';
+import { readCaptureImage } from './preprocess/file';
 import { PrivacyManager } from './privacy';
 import { resolveDisplayReference } from './references';
 import { formatDisplayList } from './layout';
+import type { VisionProvider } from './understand/provider';
 import type {
   ActiveWindowInfo,
   CaptureResult,
@@ -12,10 +22,17 @@ import type {
   VisionEventMap,
 } from './types';
 
+export interface VisionLookOptions {
+  question?: string;
+  signal?: AbortSignal;
+}
+
 export interface ScreenManagerOptions {
   capture: ScreenCaptureProvider;
   privacy: PrivacyManager;
   config: VisionConfig;
+  vision?: VisionProvider;
+  prepareImage?: (capture: CaptureResult) => Promise<PreparedImage>;
 }
 
 export class ScreenManager extends EventEmitter<VisionEventMap> {
@@ -31,12 +48,21 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
   private sampleTimer: NodeJS.Timeout | null = null;
   private unwatchDisplays: (() => void) | null = null;
   private lastAppName: string | null = null;
+  private vision: VisionProvider | null;
+  private prepareImage: (capture: CaptureResult) => Promise<PreparedImage>;
+  private lastContext: VisualContext | null = null;
 
   constructor(options: ScreenManagerOptions) {
     super();
     this.capture = options.capture;
     this.privacy = options.privacy;
     this.config = options.config;
+    this.vision = options.vision ?? null;
+    this.prepareImage = options.prepareImage ?? readCaptureImage;
+  }
+
+  setVision(vision: VisionProvider): void {
+    this.vision = vision;
   }
 
   setConfig(config: VisionConfig): void {
@@ -82,6 +108,10 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
     return this.lastCapture;
   }
 
+  getVisualContext(): VisualContext | null {
+    return this.lastContext;
+  }
+
   async listDisplays(force = false): Promise<ConnectedDisplay[]> {
     if (!this.displays.length || force) {
       await this.refreshDisplays();
@@ -112,7 +142,7 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
     return this.config;
   }
 
-  async captureScreen(reference?: string): Promise<CaptureResult> {
+  async captureScreen(reference?: string, options?: VisionLookOptions): Promise<CaptureResult> {
     this.emit('UserRequestedVision', { query: reference });
     const displays = await this.listDisplays(true);
     const active = await this.getActiveWindow(true);
@@ -124,13 +154,13 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
     if (!resolved.display) {
       throw new Error(resolved.reason);
     }
-    return this.runCapture(resolved.display.label, active, async () => {
+    return this.runCapture(resolved.display.label, active, options, async () => {
       this.assertAllowed(resolved.display!.id, active, 'display');
       return this.capture.captureDisplay(resolved.display!.id);
     });
   }
 
-  async captureActiveWindow(): Promise<CaptureResult> {
+  async captureActiveWindow(options?: VisionLookOptions): Promise<CaptureResult> {
     this.emit('UserRequestedVision', { query: 'active window' });
     const active = await this.getActiveWindow(true);
     if (!active?.title) {
@@ -139,15 +169,15 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
     const windows = await this.capture.listWindows();
     const match = windows.find((w) => titlesMatch(w.title, active.title));
     if (!match) {
-      return this.captureScreen(active.displayId ?? undefined);
+      return this.captureScreen(active.displayId ?? undefined, options);
     }
-    return this.runCapture(active.title, active, async () => {
+    return this.runCapture(active.title, active, options, async () => {
       this.assertAllowed(active.displayId, active, 'window');
       return this.capture.captureWindow(match.id);
     });
   }
 
-  async captureRegion(region: Rect, displayRef?: string): Promise<CaptureResult> {
+  async captureRegion(region: Rect, displayRef?: string, options?: VisionLookOptions): Promise<CaptureResult> {
     this.emit('UserRequestedVision', { query: 'region' });
     const displays = await this.listDisplays(true);
     const active = await this.getActiveWindow(true);
@@ -159,7 +189,7 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
     if (!resolved.display) {
       throw new Error(resolved.reason);
     }
-    return this.runCapture(`a region on ${resolved.display.label}`, active, async () => {
+    return this.runCapture(`a region on ${resolved.display.label}`, active, options, async () => {
       this.assertAllowed(resolved.display!.id, active, 'display');
       return this.capture.captureRegion(resolved.display!.id, region);
     });
@@ -185,6 +215,7 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
   private async runCapture(
     target: string,
     windowBefore: ActiveWindowInfo | null,
+    options: VisionLookOptions | undefined,
     fn: () => Promise<CaptureResult>,
   ): Promise<CaptureResult> {
     if (!this.privacy.isEnabled()) {
@@ -201,10 +232,10 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
       const result = await fn();
       this.lastCapture = result;
       this.lastCaptureAt = result.capturedAt;
-      this.lastObservation = summarizeCapture(result, windowBefore);
       this.activeWindow = result.window ?? windowBefore;
+      await this.interpret(result, windowBefore, options);
       this.emit('VisionAnalysisCompleted', { target });
-      this.emit('VisualContextUpdated', { observation: this.lastObservation });
+      this.emit('VisualContextUpdated', { observation: this.lastObservation ?? '' });
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -212,6 +243,62 @@ export class ScreenManager extends EventEmitter<VisionEventMap> {
       throw error;
     } finally {
       this.looking = false;
+    }
+  }
+
+  private async interpret(
+    result: CaptureResult,
+    windowBefore: ActiveWindowInfo | null,
+    options: VisionLookOptions | undefined,
+  ): Promise<void> {
+    if (!this.vision) {
+      this.lastContext = null;
+      this.lastObservation = summarizeCapture(result, windowBefore);
+      return;
+    }
+    const hintWindow = result.window ?? windowBefore;
+    try {
+      if (options?.signal?.aborted) {
+        throw new Error('Stopped.');
+      }
+      const image = await this.prepareImage(result);
+      const reading = await this.vision.analyze({
+        image,
+        question: options?.question,
+        hint: {
+          ...activeWindowHint(hintWindow),
+          displayLabel: result.display?.label ?? hintWindow?.displayLabel ?? undefined,
+        },
+        signal: options?.signal,
+      });
+      const context =
+        reading.source === 'model'
+          ? contextFromReading(reading.reading, result, { id: reading.providerId, model: reading.model })
+          : metadataContext({
+              capture: result,
+              providerId: reading.providerId,
+              model: reading.model,
+              summary: reading.reading.summary,
+            });
+      this.lastContext = context;
+      this.lastObservation = formatObservation(context);
+    } catch (error) {
+      if (options?.signal?.aborted) throw error;
+      const message =
+        error instanceof Error
+          ? error.name === 'TimeoutError'
+            ? 'The vision model timed out.'
+            : error.message
+          : String(error);
+      const context = metadataContext({
+        capture: result,
+        providerId: this.vision.id,
+        model: this.vision.model,
+        summary: `I captured the screen, but I could not read it. ${message}`,
+      });
+      this.lastContext = context;
+      this.lastObservation = formatObservation(context);
+      this.emit('VisionError', { error: message });
     }
   }
 

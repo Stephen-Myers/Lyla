@@ -71,6 +71,7 @@ export const DEFAULT_CONFIG: LylaConfig = {
     contextIntervalMs: 10000,
     continuousIntervalMs: 3000,
     localOnly: false,
+    model: '',
     excludedApplications: [],
     excludedDisplayIds: [],
   },

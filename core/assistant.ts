@@ -12,6 +12,8 @@ import type {
   UiMode,
 } from '../shared/types';
 import { createLlmProvider, type LLMProvider, type LlmMessage } from '../ai/llm/provider';
+import { createVisionProvider } from '../vision/understand/provider';
+import { formatVisualContextForPrompt } from '../vision/context';
 import {
   createVoiceProvider,
   textForSpeech,
@@ -73,6 +75,7 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
       });
     registerBuiltinTools(this.tools, this.memory);
     registerVisionTools(this.tools, this.screens);
+    this.screens.setVision(createVisionProvider(config.llm, config.vision));
     this.screens.on('VisualContextUpdated', () => this.emitSnapshot());
     this.screens.on('ScreenChanged', () => this.emitSnapshot());
     this.screens.on('WindowChanged', () => this.emitSnapshot());
@@ -106,6 +109,7 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
     this.voice = createVoiceProvider(config.voice);
     this.permissions.update(config.permissions);
     this.screens.setConfig(config.vision);
+    this.screens.setVision(createVisionProvider(config.llm, config.vision));
     logger.configure(config.logging);
     this.emitSnapshot();
   }
@@ -309,24 +313,32 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
       this.messages.filter((m) => m.role === 'user').at(-1)?.content,
     );
 
-    const system = [
-      buildSystemPrompt(this.config.personality, this.config.user, personalityCtx),
-      '',
-      'Relevant memories:',
-      memoryBlock,
-      '',
-      `LLM provider: ${this.config.llm.provider} (${this.config.llm.model || 'default'}).`,
-      '',
-      `Vision mode: ${this.config.vision.enabled ? this.config.vision.mode : 'disabled'}.`,
-      `Default vision is on-demand: capture a screen only when the user asks you to look.`,
-      `Use get_screens, get_active_window, capture_screen, capture_window, or capture_region for visual questions like "what's on my screen", "look at the left monitor", or "explain this".`,
-    ].join('\n');
-
     let currentAssistant = assistantMessage;
 
     // Multi-step tool loop (bounded)
     for (let step = 0; step < 4; step++) {
       if (signal.aborted) return;
+
+      const visual = this.screens.getVisualContext();
+      const system = [
+        buildSystemPrompt(this.config.personality, this.config.user, personalityCtx),
+        '',
+        'Relevant memories:',
+        memoryBlock,
+        '',
+        `LLM provider: ${this.config.llm.provider} (${this.config.llm.model || 'default'}).`,
+        '',
+        `Vision mode: ${this.config.vision.enabled ? this.config.vision.mode : 'disabled'}.`,
+        'Default vision is on-demand: capture a screen only when the user asks you to look.',
+        'Use get_screens, get_active_window, capture_screen, capture_window, or capture_region for visual questions like "what\'s on my screen", "look at the left monitor", or "explain this".',
+        'Pass the user\'s question to the capture tool when they want something on screen explained.',
+        'Answer from the visual context the tool returns. Do not invent text that was not seen. Do not claim you researched the web unless a search tool ran.',
+        visual
+          ? `\nLatest visual context (what you last saw):\n${formatVisualContextForPrompt(visual)}`
+          : '',
+      ]
+        .filter((line) => line !== '')
+        .join('\n');
 
       const llmMessages = this.buildLlmMessages(system);
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];

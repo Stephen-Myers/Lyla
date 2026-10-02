@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import type { ToolDefinition, ToolRegistry } from './types';
+import { formatVisualContextForPrompt } from '../vision/context';
 import { formatActiveWindow, ScreenManager } from '../vision/ScreenManager';
 import { formatDisplayList } from '../vision/layout';
+import type { CaptureResult } from '../vision/types';
 
 export function registerVisionTools(registry: ToolRegistry, screens: ScreenManager): void {
   registry.register(getScreensTool(screens));
@@ -47,80 +49,49 @@ function getActiveWindowTool(screens: ScreenManager): ToolDefinition {
   };
 }
 
-function captureScreenTool(screens: ScreenManager): ToolDefinition<{ display?: string }> {
+function captureScreenTool(screens: ScreenManager): ToolDefinition<{ display?: string; question?: string }> {
   return {
     name: 'capture_screen',
     description:
-      'Capture a screenshot of a display. display can be a natural reference such as "main", "left", "right", "other", "second", or a display number. Omit to capture the display the user is currently using. Phase 1 returns capture metadata (path, size, active window) — visual understanding comes in a later phase.',
+      'Look at a display and describe what is on it: subject, visible text, equations, diagrams, code, and UI. display can be main, left, right, other, second, a monitor name, or a number. Omit display to use the screen the user is on. Pass question when the user asked to explain, read, or identify something specific.',
     permission: 'computer_control',
     inputSchema: z.object({
       display: z
         .string()
         .optional()
-        .describe('Monitor reference: main, left, right, other, 1, 2, etc.'),
+        .describe('Monitor reference: main, left, right, other, 1, 2, a monitor name, etc.'),
+      question: z.string().optional().describe('What the user wants to know about the screen.'),
     }),
-    async execute({ display }) {
-      const result = await screens.captureScreen(display);
-      const observation = screens.getSnapshot().lastObservation ?? 'Captured the display.';
-      return {
-        ok: true,
-        output: [
-          observation,
-          `Saved PNG: ${result.filePath}`,
-          `Hash: ${result.hash}`,
-          'Visual content analysis is not wired yet — I can see display, application, and window metadata.',
-        ].join('\n'),
-        data: {
-          kind: result.kind,
-          filePath: result.filePath,
-          hash: result.hash,
-          width: result.width,
-          height: result.height,
-          display: result.display,
-          window: result.window,
-        },
-      };
+    async execute({ display, question }, ctx) {
+      const result = await screens.captureScreen(display, { question, signal: ctx.signal });
+      return lookResult(screens, result);
     },
   };
 }
 
-function captureWindowTool(screens: ScreenManager): ToolDefinition {
+function captureWindowTool(screens: ScreenManager): ToolDefinition<{ question?: string }> {
   return {
     name: 'capture_window',
     description:
-      'Capture the currently active application window rather than the full display.',
+      'Look at the currently active application window and describe what is visible. Pass question when the user wants a specific part explained.',
     permission: 'computer_control',
-    inputSchema: z.object({}),
-    async execute() {
-      const result = await screens.captureActiveWindow();
-      const observation = screens.getSnapshot().lastObservation ?? 'Captured the window.';
-      return {
-        ok: true,
-        output: [
-          observation,
-          `Saved PNG: ${result.filePath}`,
-          `Hash: ${result.hash}`,
-        ].join('\n'),
-        data: {
-          kind: result.kind,
-          filePath: result.filePath,
-          hash: result.hash,
-          width: result.width,
-          height: result.height,
-          window: result.window,
-        },
-      };
+    inputSchema: z.object({
+      question: z.string().optional(),
+    }),
+    async execute({ question }, ctx) {
+      const result = await screens.captureActiveWindow({ question, signal: ctx.signal });
+      return lookResult(screens, result);
     },
   };
 }
 
 function captureRegionTool(
   screens: ScreenManager,
-): ToolDefinition<{ x: number; y: number; width: number; height: number; display?: string }> {
+): ToolDefinition<{ x: number; y: number; width: number; height: number; display?: string; question?: string }> {
   return {
     name: 'capture_region',
     description:
-      'Capture a rectangular region of a display. Coordinates are in display DIP/logical pixels from the top-left of that display.',
+      'Look at a rectangular region of a display and describe what is visible there. Coordinates are in display DIP/logical pixels from the top-left of that display.',
     permission: 'computer_control',
     inputSchema: z.object({
       x: z.number(),
@@ -128,26 +99,30 @@ function captureRegionTool(
       width: z.number(),
       height: z.number(),
       display: z.string().optional(),
+      question: z.string().optional(),
     }),
-    async execute({ x, y, width, height, display }) {
-      const result = await screens.captureRegion({ x, y, width, height }, display);
-      const observation = screens.getSnapshot().lastObservation ?? 'Captured a region.';
-      return {
-        ok: true,
-        output: [
-          observation,
-          `Saved PNG: ${result.filePath}`,
-          `Hash: ${result.hash}`,
-        ].join('\n'),
-        data: {
-          kind: result.kind,
-          filePath: result.filePath,
-          hash: result.hash,
-          width: result.width,
-          height: result.height,
-          region: result.region,
-        },
-      };
+    async execute({ x, y, width, height, display, question }, ctx) {
+      const result = await screens.captureRegion({ x, y, width, height }, display, {
+        question,
+        signal: ctx.signal,
+      });
+      return lookResult(screens, result);
+    },
+  };
+}
+
+function lookResult(screens: ScreenManager, result: CaptureResult) {
+  const context = screens.getVisualContext();
+  return {
+    ok: true,
+    output: context
+      ? formatVisualContextForPrompt(context)
+      : (screens.getSnapshot().lastObservation ?? 'Captured the screen.'),
+    data: {
+      kind: result.kind,
+      width: result.width,
+      height: result.height,
+      context,
     },
   };
 }

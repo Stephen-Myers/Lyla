@@ -13,6 +13,7 @@ import { loadConfig, saveConfig } from '../../config/store';
 import { logger } from '../../core/logging';
 import { IPC, type LylaConfig, type UiMode } from '../../shared/types';
 import { createElectronCaptureProvider } from '../../vision/capture/electron';
+import { preprocessWithElectron } from '../../vision/preprocess/electron';
 import { PrivacyManager } from '../../vision/privacy';
 import { ScreenManager } from '../../vision/ScreenManager';
 
@@ -170,6 +171,7 @@ app.whenReady().then(() => {
     capture: createElectronCaptureProvider({ captureDir }),
     privacy: new PrivacyManager(config.vision),
     config: config.vision,
+    prepareImage: preprocessWithElectron,
   });
   assistant = new LylaAssistant(config, { screenManager });
   wireAssistant(assistant);
