@@ -80,19 +80,28 @@ export function parseVisionReading(raw: string): VisionModelReading {
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Vision model returned malformed JSON.');
   }
-  const record = parsed as Record<string, unknown>;
-  const contentType = normalizeContentType(record.content_type ?? record.contentType);
-  const visibleText = stringList(record.visible_text ?? record.visibleText).slice(0, 12);
-  const visualElements = elementList(record.visual_elements ?? record.visualElements).slice(0, 12);
-  return {
-    contentType,
-    subject: clip(record.subject, 200),
-    title: clip(record.title, 200),
-    visibleText,
-    visualElements,
-    summary: clip(record.summary, 1200),
-    confidence: normalizeConfidence(record.confidence),
-  };
+  return readingFromRecord(parsed as Record<string, unknown>);
+}
+
+/** Prefer JSON. If the model describes the screen in prose, keep that instead of failing the look. */
+export function readingFromModelText(raw: string): VisionModelReading {
+  const text = raw.trim();
+  if (!text) {
+    throw new Error('Vision model returned an empty description.');
+  }
+  try {
+    return parseVisionReading(text);
+  } catch {
+    return {
+      contentType: 'other',
+      subject: '',
+      title: '',
+      visibleText: [],
+      visualElements: [],
+      summary: clip(text, 1200),
+      confidence: 0.45,
+    };
+  }
 }
 
 export function metadataContext(input: {
@@ -208,6 +217,18 @@ export function buildVisionUserPrompt(input: {
     lines.push('Pay particular attention to the part of the screen that question is about.');
   }
   return lines.join('\n');
+}
+
+function readingFromRecord(record: Record<string, unknown>): VisionModelReading {
+  return {
+    contentType: normalizeContentType(record.content_type ?? record.contentType),
+    subject: clip(record.subject, 200),
+    title: clip(record.title, 200),
+    visibleText: stringList(record.visible_text ?? record.visibleText).slice(0, 12),
+    visualElements: elementList(record.visual_elements ?? record.visualElements).slice(0, 12),
+    summary: clip(record.summary, 1200),
+    confidence: normalizeConfidence(record.confidence),
+  };
 }
 
 function screenOf(display: ConnectedDisplay | null): VisualContext['screen'] {

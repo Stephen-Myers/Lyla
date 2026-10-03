@@ -1,5 +1,5 @@
 import type { LlmConfig } from '../../shared/types';
-import { buildVisionUserPrompt, parseVisionReading } from '../context';
+import { buildVisionUserPrompt, readingFromModelText } from '../context';
 import { linkSignals, readErrorBody } from './http';
 import type { VisionAnalysisRequest, VisionProvider, VisionReadingResult } from './provider';
 
@@ -61,9 +61,10 @@ export class AnthropicVisionProvider implements VisionProvider {
     const json = (await response.json()) as {
       content?: Array<{ type?: string; text?: string }>;
     };
-    const text = json.content?.filter((block) => block.type === 'text').map((block) => block.text ?? '').join('\n') ?? '';
+    const text =
+      json.content?.filter((block) => block.type === 'text').map((block) => block.text ?? '').join('\n') ?? '';
     return {
-      reading: parseVisionReading(text),
+      reading: readingFromModelText(text),
       source: 'model',
       providerId: this.id,
       model: this.model,

@@ -1,5 +1,5 @@
 import type { LlmConfig } from '../../shared/types';
-import { buildVisionUserPrompt, parseVisionReading } from '../context';
+import { buildVisionUserPrompt, readingFromModelText } from '../context';
 import { linkSignals, readErrorBody } from './http';
 import type { VisionAnalysisRequest, VisionProvider, VisionReadingResult } from './provider';
 
@@ -34,6 +34,7 @@ export class OpenAiVisionProvider implements VisionProvider {
         model: this.model,
         temperature: 0.2,
         max_tokens: 1200,
+        ...(this.id === 'openai' ? { response_format: { type: 'json_object' } } : {}),
         messages: [
           {
             role: 'user',
@@ -50,11 +51,15 @@ export class OpenAiVisionProvider implements VisionProvider {
       throw new Error(`${this.id} vision error ${response.status}: ${await readErrorBody(response)}`);
     }
     const json = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string | null } }>;
+      choices?: Array<{ message?: { content?: unknown; refusal?: string | null } }>;
     };
-    const text = json.choices?.[0]?.message?.content ?? '';
+    const message = json.choices?.[0]?.message;
+    const text = textFromContent(message?.content);
+    if (!text.trim()) {
+      throw new Error(message?.refusal?.trim() || 'Vision model returned an empty description.');
+    }
     return {
-      reading: parseVisionReading(text),
+      reading: readingFromModelText(text),
       source: 'model',
       providerId: this.id,
       model: this.model,
@@ -69,4 +74,19 @@ function promptFor(request: VisionAnalysisRequest): string {
     windowTitle: request.hint?.windowTitle,
     displayLabel: request.hint?.displayLabel,
   });
+}
+
+function textFromContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      if (part && typeof part === 'object' && 'text' in part) {
+        const text = (part as { text?: unknown }).text;
+        return typeof text === 'string' ? text : '';
+      }
+      return '';
+    })
+    .join('\n');
 }

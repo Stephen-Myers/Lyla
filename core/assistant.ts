@@ -332,7 +332,8 @@ export class LylaAssistant extends EventEmitter<AssistantEvents> {
         'Default vision is on-demand: capture a screen only when the user asks you to look.',
         'Use get_screens, get_active_window, capture_screen, capture_window, or capture_region for visual questions like "what\'s on my screen", "look at the left monitor", or "explain this".',
         'Pass the user\'s question to the capture tool when they want something on screen explained.',
-        'Answer from the visual context the tool returns. Do not invent text that was not seen. Do not claim you researched the web unless a search tool ran.',
+        'When a visual context is present, you have looked at the screen. Answer from it. Do not say you cannot see the screen.',
+        'Do not invent text that was not in that context. Do not claim you researched the web unless a search tool ran.',
         visual
           ? `\nLatest visual context (what you last saw):\n${formatVisualContextForPrompt(visual)}`
           : '',

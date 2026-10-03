@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_CONFIG } from '../config/defaults';
-import { buildVisionUserPrompt, parseVisionReading } from '../vision/context';
+import { buildVisionUserPrompt, parseVisionReading, readingFromModelText } from '../vision/context';
 import { layoutDisplays } from '../vision/layout';
 import { PrivacyManager } from '../vision/privacy';
 import { ScreenManager } from '../vision/ScreenManager';
@@ -108,6 +108,14 @@ describe('vision reading parser', () => {
     expect(reading.contentType).toBe('presentation');
     expect(reading.visibleText[0]).toContain('Wx + b');
     expect(reading.confidence).toBeCloseTo(0.94);
+  });
+
+  it('keeps a prose description when the model does not return JSON', () => {
+    const reading = readingFromModelText(
+      'This is a lecture slide titled Using score for search, with a table of binary indexes.',
+    );
+    expect(reading.summary).toContain('Using score for search');
+    expect(reading.confidence).toBeGreaterThan(0);
   });
 
   it('includes the user question in the vision prompt', () => {

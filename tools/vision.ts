@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { logger } from '../core/logging';
 import type { ToolDefinition, ToolRegistry } from './types';
 import { formatVisualContextForPrompt } from '../vision/context';
 import { formatActiveWindow, ScreenManager } from '../vision/ScreenManager';
@@ -113,6 +114,19 @@ function captureRegionTool(
 
 function lookResult(screens: ScreenManager, result: CaptureResult) {
   const context = screens.getVisualContext();
+  if (context) {
+    const incomplete = context.source !== 'model';
+    const fields = {
+      provider: context.providerId,
+      model: context.model,
+      source: context.source,
+      contentType: context.contentType,
+      confidence: context.confidence,
+      summary: context.summary.slice(0, 300),
+    };
+    if (incomplete) logger.warn('vision', 'Screen capture saved, read incomplete', fields);
+    else logger.info('vision', 'Screen read', fields);
+  }
   return {
     ok: true,
     output: context
