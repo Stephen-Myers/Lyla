@@ -1,7 +1,7 @@
 {
   "name": "lyla",
   "version": "0.1.0",
-  "description": "LYLA — LYrate Lifeform Approximation: personal AI computer assistant",
+  "description": "LYLA (LYrate Lifeform Approximation): a personal Windows AI assistant with screen vision, memory, and spoken replies.",
   "main": "dist-electron/main/index.js",
   "type": "module",
   "scripts": {
