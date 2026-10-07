@@ -4,6 +4,8 @@
 
 You talk to it in natural language. It can check the machine, open apps, remember things, look at your screens, and speak its replies.
 
+https://youtu.be/jm5UvJ7xr0Q
+
 ## What it does
 
 - Streaming chat with a tool loop, so actions are real and failures are reported
